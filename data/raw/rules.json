@@ -1,0 +1,17 @@
+{
+  "scenario_name": "Valid Retail Receipt",
+
+  "thresholds": {
+    "min_value": 100,
+    "max_value": 10000
+  },
+
+  "lists": {
+    "whitelist": ["food", "drink", "dessert", "coffee"],
+    "blacklist": ["alcohol", "tobacco", "weapon", "unknown_item"]
+  },
+
+  "critical_rules": {
+    "must_be_verified": true
+  }
+}
