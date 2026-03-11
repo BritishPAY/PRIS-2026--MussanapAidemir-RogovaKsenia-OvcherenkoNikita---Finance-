@@ -1,4 +1,7 @@
-pandas
-streamlit
-notebook
-opencv-python-headless
+easyocr>=1.7.1
+tqdm>=4.66.4
+transformers>=4.45.1
+torch>=2.4.0
+accelerate>=0.34.0
+safetensors>=0.4.5
+sentencepiece>=0.2.0
