@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Receipt Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════
+   VARIABLES & RESET
+═══════════════════════════════════════════ */
+:root {
+  --bg:        #0d0f14;
+  --bg2:       #13161e;
+  --bg3:       #1a1e2a;
+  --border:    #252836;
+  --gold:      #f5a623;
+  --gold2:     #e8943a;
+  --text:      #e8eaf0;
+  --muted:     #6b7280;
+  --green:     #34d399;
+  --red:       #f87171;
+  --blue:      #60a5fa;
+  --radius:    12px;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  --cat-meat:    #ef4444;
+  --cat-fish:    #3b82f6;
+  --cat-veg:     #22c55e;
+  --cat-fruit:   #f97316;
+  --cat-dairy:   #a78bfa;
+  --cat-bakery:  #fbbf24;
+  --cat-bev:     #06b6d4;
+  --cat-alc:     #8b5cf6;
+  --cat-snack:   #fb923c;
+  --cat-sweet:   #f472b6;
+  --cat-rest:    #10b981;
+  --cat-house:   #6b7280;
+  --cat-care:    #ec4899;
+  --cat-tobacco: #78716c;
+  --cat-other:   #374151;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-head);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════════════════
+   NOISE TEXTURE OVERLAY
+═══════════════════════════════════════════ */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+/* ═══════════════════════════════════════════
+   LAYOUT
+═══════════════════════════════════════════ */
+.app { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 40px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(13,15,20,0.8);
+  backdrop-filter: blur(12px);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo {
+  display: flex; align-items: center; gap: 12px;
+}
+.logo-icon {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.logo-text { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
+.logo-text span { color: var(--gold); }
+
+.header-status {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+}
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ═══════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════ */
+.tabs {
+  display: flex; gap: 0;
+  padding: 0 40px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.tab-btn {
+  padding: 16px 24px;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--font-head); font-size: 14px; font-weight: 600;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  transition: all .2s;
+  letter-spacing: 0.3px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab-btn .tab-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--gold); color: #000;
+  font-size: 10px; font-weight: 700; margin-left: 6px;
+  opacity: 0; transform: scale(0);
+  transition: all .2s;
+}
+.tab-btn .tab-badge.show { opacity: 1; transform: scale(1); }
+
+.tab-panel { display: none; padding: 40px; animation: fadeIn .3s ease; }
+.tab-panel.active { display: block; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+/* ═══════════════════════════════════════════
+   CARDS
+═══════════════════════════════════════════ */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+.card-title {
+  font-size: 12px; font-weight: 600; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 20px;
+}
+
+/* ═══════════════════════════════════════════
+   TAB 1 — UPLOAD
+═══════════════════════════════════════════ */
+.upload-grid { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
+
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 60px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .25s;
+  background: var(--bg2);
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--gold);
+  background: rgba(245,166,35,0.04);
+}
+.drop-zone.drag-over { transform: scale(1.01); }
+.drop-icon { font-size: 48px; margin-bottom: 16px; opacity: .6; }
+.drop-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.drop-sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+.drop-formats {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+}
+.fmt-badge {
+  padding: 4px 10px; border-radius: 20px;
+  background: var(--bg3); border: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+}
+#fileInput { display: none; }
+
+.btn {
+  padding: 12px 24px; border-radius: 8px; border: none; cursor: pointer;
+  font-family: var(--font-head); font-size: 14px; font-weight: 600;
+  transition: all .2s;
+}
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  color: #000;
+}
+.btn-gold:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-gold:active { transform: none; }
+.btn-ghost {
+  background: none; border: 1px solid var(--border);
+  color: var(--text);
+}
+.btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+.btn-sm { padding: 7px 14px; font-size: 12px; }
+
+/* Receipt list */
+.receipts-panel { overflow: hidden; }
+.receipts-list { display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; }
+.receipts-list::-webkit-scrollbar { width: 4px; }
+.receipts-list::-webkit-scrollbar-track { background: transparent; }
+.receipts-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.receipt-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 8px;
+  background: var(--bg3); border: 1px solid var(--border);
+  animation: slideIn .2s ease;
+}
+@keyframes slideIn { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:none} }
+.receipt-icon { font-size: 24px; flex-shrink: 0; }
+.receipt-info { flex: 1; min-width: 0; }
+.receipt-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.receipt-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+.receipt-total {
+  font-family: var(--font-mono); font-size: 14px; font-weight: 500;
+  color: var(--gold); flex-shrink: 0;
+}
+.receipt-status {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.receipt-status.ok { background: var(--green); }
+.receipt-status.empty { background: var(--red); }
+.receipt-status.processing { background: var(--gold); animation: pulse 1s infinite; }
+
+/* Processing overlay */
+.processing-bar {
+  height: 2px; background: var(--border); border-radius: 2px; margin-top: 16px;
+  overflow: hidden; display: none;
+}
+.processing-bar.show { display: block; }
+.processing-fill {
+  height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold2));
+  border-radius: 2px;
+  animation: load 1.5s ease-in-out infinite;
+}
+@keyframes load { 0%{width:0%;margin-left:0} 50%{width:60%;margin-left:20%} 100%{width:0%;margin-left:100%} }
+
+/* Quick stats row */
+.quick-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px;
+}
+.stat-label { font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.stat-value { font-family: var(--font-mono); font-size: 28px; font-weight: 500; margin-top: 6px; color: var(--gold); }
+.stat-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+/* ═══════════════════════════════════════════
+   TAB 2 — MANUAL EXPENSES
+═══════════════════════════════════════════ */
+.manual-grid { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
+.expenses-form { display: flex; flex-direction: column; gap: 0; }
+
+.expense-row {
+  display: grid; grid-template-columns: 1fr auto;
+  align-items: center; gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.expense-row:last-child { border-bottom: none; }
+.expense-label { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+.expense-label .emoji { font-size: 20px; }
+
+.expense-input-wrap { display: flex; align-items: center; gap: 6px; }
+.currency-symbol { font-family: var(--font-mono); color: var(--muted); font-size: 14px; }
+.expense-input {
+  width: 120px; padding: 8px 12px; border-radius: 8px;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--font-mono); font-size: 15px;
+  text-align: right; transition: border-color .2s;
+}
+.expense-input:focus { outline: none; border-color: var(--gold); }
+.expense-input::placeholder { color: var(--muted); }
+
+.groceries-row { background: rgba(245,166,35,0.05); border-radius: 10px; padding: 16px; margin-bottom: 8px; border: 1px solid rgba(245,166,35,0.15); }
+.groceries-suggest {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--gold); margin-top: 6px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.groceries-suggest:hover { text-decoration: underline; }
+
+.manual-total-card {
+  background: linear-gradient(135deg, rgba(245,166,35,0.1), rgba(232,148,58,0.05));
+  border: 1px solid rgba(245,166,35,0.3);
+  border-radius: var(--radius); padding: 28px; text-align: center;
+}
+.manual-total-label { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.manual-total-value { font-family: var(--font-mono); font-size: 42px; font-weight: 500; color: var(--gold); margin: 12px 0; }
+.manual-breakdown { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; text-align: left; }
+.breakdown-row { display: flex; justify-content: space-between; align-items: center; }
+.breakdown-label { font-size: 13px; color: var(--muted); }
+.breakdown-val { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
+
+/* ═══════════════════════════════════════════
+   TAB 3 — STATISTICS
+═══════════════════════════════════════════ */
+.stats-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 28px;
+}
+.stats-title { font-size: 28px; font-weight: 800; }
+.stats-title span { color: var(--gold); }
+
+.stats-top { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.big-stat {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px;
+  position: relative; overflow: hidden;
+}
+.big-stat::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--accent, var(--gold));
+}
+.big-stat-label { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+.big-stat-value { font-family: var(--font-mono); font-size: 32px; font-weight: 400; color: var(--text); margin: 8px 0; }
+.big-stat-sub { font-size: 12px; color: var(--muted); }
+.big-stat-icon { position: absolute; right: 20px; top: 20px; font-size: 28px; opacity: .15; }
+
+.charts-grid { display: grid; grid-template-columns: 380px 1fr; gap: 24px; margin-bottom: 24px; }
+.chart-wrap { position: relative; }
+canvas { max-width: 100%; }
+
+.category-bars { display: flex; flex-direction: column; gap: 10px; }
+.cat-bar-row { display: flex; align-items: center; gap: 12px; }
+.cat-bar-label { width: 160px; font-size: 13px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-bar-track { flex: 1; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.cat-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s cubic-bezier(.4,0,.2,1); }
+.cat-bar-val { width: 70px; text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--muted); flex-shrink: 0; }
+
+.manual-cats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.manual-cat-card {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.manual-cat-label { font-size: 13px; }
+.manual-cat-val { font-family: var(--font-mono); font-size: 14px; color: var(--gold); }
+
+/* ═══════════════════════════════════════════
+   EMPTY STATE
+═══════════════════════════════════════════ */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty-state-icon { font-size: 56px; margin-bottom: 16px; opacity: .4; }
+.empty-state-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text); opacity: .5; }
+.empty-state-sub { font-size: 14px; }
+
+/* ═══════════════════════════════════════════
+   MISC
+═══════════════════════════════════════════ */
+.section-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
+}
+.flex-row { display: flex; gap: 12px; align-items: center; }
+.spacer { flex: 1; }
+hr.divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+.text-gold { color: var(--gold); }
+.text-muted { color: var(--muted); }
+.font-mono { font-family: var(--font-mono); }
+
+/* Scrollbar global */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+@media (max-width: 900px) {
+  header { padding: 16px 20px; }
+  .tabs { padding: 0 20px; }
+  .tab-panel { padding: 20px; }
+  .upload-grid, .manual-grid, .charts-grid { grid-template-columns: 1fr; }
+  .stats-top { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ─── HEADER ─── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🧾</div>
+    <div class="logo-text">Receipt<span>Analytics</span></div>
+  </div>
+  <div class="header-status">
+    <div class="status-dot"></div>
+    <span id="parserStatus">{{ 'Парсер подключён' if parser_ok else 'Демо-режим' }}</span>
+  </div>
+</header>
+
+<!-- ─── TABS ─── -->
+<nav class="tabs">
+  <button class="tab-btn active" onclick="switchTab('upload')">
+    📄 Чеки <span class="tab-badge" id="badge-upload">0</span>
+  </button>
+  <button class="tab-btn" onclick="switchTab('manual')">
+    ✏️ Ручные расходы
+  </button>
+  <button class="tab-btn" onclick="switchTab('stats')">
+    📊 Статистика
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════
+     TAB 1 — UPLOAD
+════════════════════════════════════════ -->
+<div class="tab-panel active" id="tab-upload">
+
+  <div class="quick-stats" id="quickStats">
+    <div class="stat-card">
+      <div class="stat-label">Чеков загружено</div>
+      <div class="stat-value font-mono" id="qs-count">0</div>
+      <div class="stat-sub">файлов обработано</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Позиций найдено</div>
+      <div class="stat-value font-mono" id="qs-items">0</div>
+      <div class="stat-sub">товаров и блюд</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Сумма по чекам</div>
+      <div class="stat-value font-mono" id="qs-total">$0</div>
+      <div class="stat-sub">распознано</div>
+    </div>
+  </div>
+
+  <div class="upload-grid">
+    <!-- Drop zone -->
+    <div>
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-icon">📂</div>
+        <div class="drop-title">Перетащите чеки сюда</div>
+        <div class="drop-sub">или нажмите чтобы выбрать файлы</div>
+        <div class="drop-formats">
+          <span class="fmt-badge">.jpg</span>
+          <span class="fmt-badge">.png</span>
+          <span class="fmt-badge">.txt</span>
+          <span class="fmt-badge">.jpeg</span>
+        </div>
+        <div class="processing-bar" id="processingBar"><div class="processing-fill"></div></div>
+        <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.txt,.webp">
+      </div>
+      <div class="flex-row" style="margin-top:16px">
+        <button class="btn btn-gold" onclick="document.getElementById('fileInput').click()">
+          Выбрать файлы
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="clearAll()">Очистить всё</button>
+        <div class="spacer"></div>
+        <span class="text-muted font-mono" style="font-size:12px" id="uploadHint">Файлы не выбраны</span>
+      </div>
+    </div>
+
+    <!-- Receipt list -->
+    <div class="card receipts-panel">
+      <div class="card-title">Обработанные чеки</div>
+      <div class="receipts-list" id="receiptsList">
+        <div class="empty-state">
+          <div class="empty-state-icon">🗂️</div>
+          <div class="empty-state-title">Нет загруженных чеков</div>
+          <div class="empty-state-sub">Загрузите .txt или фото чека</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     TAB 2 — MANUAL EXPENSES
+════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-manual">
+  <div class="manual-grid">
+
+    <!-- Form -->
+    <div class="card">
+      <div class="card-title">Ручной ввод расходов</div>
+
+      <!-- Groceries special row -->
+      <div class="groceries-row">
+        <div class="expense-row" style="border:none;padding:0">
+          <div class="expense-label">
+            <span class="emoji">🛒</span>
+            <div>
+              <div>Продукты питания</div>
+              <div style="font-size:11px;color:var(--muted);font-weight:400">можно взять из чеков</div>
+            </div>
+          </div>
+          <div class="expense-input-wrap">
+            <span class="currency-symbol">$</span>
+            <input type="number" class="expense-input" id="exp-groceries"
+                   placeholder="0.00" step="0.01" min="0"
+                   oninput="updateManualTotal()">
+          </div>
+        </div>
+        <div class="groceries-suggest" id="groceriesSuggest" style="display:none"
+             onclick="applyGrocerySuggest()">
+          ↑ Подставить из чеков: <strong id="grocerySuggestVal">$0</strong>
+        </div>
+      </div>
+
+      <div class="expenses-form" id="expensesForm">
+        {% for key, label in manual_cats %}
+        {% if key != 'groceries' %}
+        <div class="expense-row">
+          <div class="expense-label">
+            <span class="emoji">{{ label.split()[0] }}</span>
+            <span>{{ label.split(' ', 1)[1] }}</span>
+          </div>
+          <div class="expense-input-wrap">
+            <span class="currency-symbol">$</span>
+            <input type="number" class="expense-input" id="exp-{{ key }}"
+                   placeholder="0.00" step="0.01" min="0"
+                   oninput="updateManualTotal()">
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="manual-total-card">
+        <div class="manual-total-label">Итого ручные расходы</div>
+        <div class="manual-total-value" id="manualTotalVal">$0.00</div>
+        <div class="manual-breakdown" id="manualBreakdown">
+          <div class="text-muted" style="font-size:13px;text-align:center">Заполните поля слева</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Итоговый бюджет</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="breakdown-row">
+            <span class="breakdown-label">📄 По чекам</span>
+            <span class="breakdown-val font-mono" id="budgetReceipts">$0.00</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label">✏️ Ручные расходы</span>
+            <span class="breakdown-val font-mono" id="budgetManual">$0.00</span>
+          </div>
+          <hr class="divider" style="margin:4px 0">
+          <div class="breakdown-row">
+            <span class="breakdown-label" style="font-weight:700;color:var(--text)">💰 ВСЕГО</span>
+            <span class="breakdown-val font-mono text-gold" style="font-size:18px" id="budgetTotal">$0.00</span>
+          </div>
+        </div>
+        <button class="btn btn-gold" style="width:100%;margin-top:20px" onclick="switchTab('stats')">
+          Посмотреть статистику →
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     TAB 3 — STATISTICS
+════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-stats">
+
+  <div class="stats-header">
+    <div class="stats-title">Анализ <span>расходов</span></div>
+    <button class="btn btn-ghost btn-sm" onclick="refreshStats()">↻ Обновить</button>
+  </div>
+
+  <div id="statsEmpty" class="empty-state">
+    <div class="empty-state-icon">📈</div>
+    <div class="empty-state-title">Нет данных для анализа</div>
+    <div class="empty-state-sub">Загрузите чеки или введите расходы вручную</div>
+  </div>
+
+  <div id="statsContent" style="display:none">
+    <!-- Big numbers -->
+    <div class="stats-top">
+      <div class="big-stat" style="--accent:var(--gold)">
+        <div class="big-stat-icon">💰</div>
+        <div class="big-stat-label">Общие расходы</div>
+        <div class="big-stat-value" id="st-grand">$0</div>
+        <div class="big-stat-sub">за всё время</div>
+      </div>
+      <div class="big-stat" style="--accent:var(--green)">
+        <div class="big-stat-icon">🧾</div>
+        <div class="big-stat-label">По чекам</div>
+        <div class="big-stat-value" id="st-receipts">$0</div>
+        <div class="big-stat-sub" id="st-receipts-sub">0 чеков</div>
+      </div>
+      <div class="big-stat" style="--accent:var(--blue)">
+        <div class="big-stat-icon">✏️</div>
+        <div class="big-stat-label">Ручные расходы</div>
+        <div class="big-stat-value" id="st-manual">$0</div>
+        <div class="big-stat-sub">введено вручную</div>
+      </div>
+      <div class="big-stat" style="--accent:var(--red)">
+        <div class="big-stat-icon">🍽️</div>
+        <div class="big-stat-label">Позиций в чеках</div>
+        <div class="big-stat-value" id="st-items">0</div>
+        <div class="big-stat-sub">распознано</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-title">Категории покупок (чеки)</div>
+        <div class="chart-wrap" style="height:280px;display:flex;align-items:center;justify-content:center">
+          <canvas id="donutChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">По категориям</div>
+        <div class="category-bars" id="categoryBars"></div>
+      </div>
+    </div>
+
+    <!-- Manual expenses breakdown -->
+    <div class="card" id="manualStatsCard" style="display:none">
+      <div class="card-title">Ручные расходы по категориям</div>
+      <div class="manual-cats-grid" id="manualCatsGrid"></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+const state = {
+  receipts: [],        // [{id, name, items, total, status}]
+  manualValues: {},    // {key: value}
+  grocerySuggest: 0,
+};
+
+const CATEGORY_COLORS = {
+  meat:            '#ef4444',
+  fish:            '#3b82f6',
+  vegetables:      '#22c55e',
+  fruits:          '#f97316',
+  dairy:           '#a78bfa',
+  bakery:          '#fbbf24',
+  beverages:       '#06b6d4',
+  alcohol:         '#8b5cf6',
+  snacks:          '#fb923c',
+  sweets:          '#f472b6',
+  restaurant_food: '#10b981',
+  household:       '#6b7280',
+  personal_care:   '#ec4899',
+  tobacco:         '#78716c',
+  other:           '#374151',
+};
+
+const CATEGORY_LABELS = {
+  meat:            '🥩 Мясо',
+  fish:            '🐟 Рыба',
+  vegetables:      '🥦 Овощи',
+  fruits:          '🍎 Фрукты',
+  dairy:           '🥛 Молочное',
+  bakery:          '🥐 Выпечка',
+  beverages:       '☕ Напитки',
+  alcohol:         '🍷 Алкоголь',
+  snacks:          '🍿 Снеки',
+  sweets:          '🍰 Сладости',
+  restaurant_food: '🍽️ Ресторан',
+  household:       '🧹 Хозтовары',
+  personal_care:   '🧴 Гигиена',
+  tobacco:         '🚬 Табак',
+  other:           '📦 Прочее',
+};
+
+// ═══════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const tabs = ['upload','manual','stats'];
+    b.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'stats') refreshStats();
+}
+
+// ═══════════════════════════════════════════
+//  DRAG & DROP
+// ═══════════════════════════════════════════
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  uploadFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => uploadFiles(fileInput.files));
+
+// ═══════════════════════════════════════════
+//  UPLOAD
+// ═══════════════════════════════════════════
+async function uploadFiles(files) {
+  if (!files.length) return;
+
+  const hint = document.getElementById('uploadHint');
+  const bar  = document.getElementById('processingBar');
+  hint.textContent = `Обработка ${files.length} файл(ов)...`;
+  bar.classList.add('show');
+
+  const form = new FormData();
+  for (const f of files) form.append('receipts', f);
+
+  try {
+    const res  = await fetch('/api/upload', { method: 'POST', body: form });
+    const data = await res.json();
+
+    if (data.receipts) {
+      data.receipts.forEach(r => {
+        // Не дублируем
+        if (!state.receipts.find(x => x.id === r.id)) {
+          state.receipts.push(r);
+        }
+      });
+      renderReceiptsList();
+      updateQuickStats();
+      updateGrocerySuggest();
+      updateBudget();
+    }
+    hint.textContent = `Загружено ${state.receipts.length} чек(ов)`;
+  } catch(e) {
+    hint.textContent = `Ошибка: ${e.message}`;
+    console.error(e);
+  } finally {
+    bar.classList.remove('show');
+  }
+}
+
+// ═══════════════════════════════════════════
+//  RENDER RECEIPTS LIST
+// ═══════════════════════════════════════════
+function renderReceiptsList() {
+  const list = document.getElementById('receiptsList');
+  if (!state.receipts.length) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon">🗂️</div>
+      <div class="empty-state-title">Нет загруженных чеков</div>
+      <div class="empty-state-sub">Загрузите .txt или фото чека</div>
+    </div>`;
+    return;
+  }
+  list.innerHTML = state.receipts.map(r => {
+    const icon   = r.type === 'image' ? '🖼️' : '📄';
+    const status = r.status === 'ok' ? 'ok' : 'empty';
+    const items  = r.items ? r.items.length : 0;
+    const total  = r.total ? `$${r.total.toFixed(2)}` : '—';
+    return `<div class="receipt-item">
+      <div class="receipt-icon">${icon}</div>
+      <div class="receipt-info">
+        <div class="receipt-name">${escHtml(r.name)}</div>
+        <div class="receipt-meta">${items} позиций</div>
+      </div>
+      <div class="receipt-total">${total}</div>
+      <div class="receipt-status ${status}"></div>
+    </div>`;
+  }).join('');
+
+  // Badge
+  const badge = document.getElementById('badge-upload');
+  badge.textContent = state.receipts.length;
+  badge.classList.toggle('show', state.receipts.length > 0);
+}
+
+function updateQuickStats() {
+  const count = state.receipts.length;
+  const items = state.receipts.reduce((s,r) => s + (r.items ? r.items.length : 0), 0);
+  const total = state.receipts.reduce((s,r) => s + (r.total || 0), 0);
+  document.getElementById('qs-count').textContent = count;
+  document.getElementById('qs-items').textContent = items;
+  document.getElementById('qs-total').textContent = '$' + total.toFixed(2);
+}
+
+function updateGrocerySuggest() {
+  // Сумма категорий продуктов из чеков
+  const foodCats = ['meat','fish','vegetables','fruits','dairy','bakery',
+                    'beverages','snacks','sweets','restaurant_food','other'];
+  let sum = 0;
+  state.receipts.forEach(r => {
+    (r.items || []).forEach(it => {
+      if (foodCats.includes(it.category)) sum += (it.price || 0);
+    });
+  });
+  state.grocerySuggest = sum;
+  const el = document.getElementById('groceriesSuggest');
+  const valEl = document.getElementById('grocerySuggestVal');
+  if (sum > 0) {
+    el.style.display = 'inline-flex';
+    valEl.textContent = '$' + sum.toFixed(2);
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function applyGrocerySuggest() {
+  const inp = document.getElementById('exp-groceries');
+  inp.value = state.grocerySuggest.toFixed(2);
+  updateManualTotal();
+}
+
+function clearAll() {
+  state.receipts = [];
+  state.grocerySuggest = 0;
+  renderReceiptsList();
+  updateQuickStats();
+  updateGrocerySuggest();
+  updateBudget();
+}
+
+// ═══════════════════════════════════════════
+//  MANUAL EXPENSES
+// ═══════════════════════════════════════════
+function updateManualTotal() {
+  let total = 0;
+  const breakdown = [];
+  const allKeys = ['groceries','taxi','transport','medical','leisure',
+                   'clothing','beauty','gym','education','pets',
+                   'subscriptions','housing','gifts','other_manual'];
+  const allLabels = {
+    groceries:'🛒 Продукты', taxi:'🚕 Такси', transport:'🚌 Транспорт',
+    medical:'💊 Медицина', leisure:'🎭 Развлечения', clothing:'👗 Одежда',
+    beauty:'💅 Красота', gym:'🏋️ Фитнес', education:'📚 Образование',
+    pets:'🐾 Питомцы', subscriptions:'📱 Подписки', housing:'🏠 Жильё',
+    gifts:'🎁 Подарки', other_manual:'📋 Прочее',
+  };
+
+  allKeys.forEach(k => {
+    const el  = document.getElementById('exp-' + k);
+    const val = el ? parseFloat(el.value) || 0 : 0;
+    state.manualValues[k] = val;
+    if (val > 0) {
+      total += val;
+      breakdown.push({ label: allLabels[k] || k, val });
+    }
+  });
+
+  document.getElementById('manualTotalVal').textContent = '$' + total.toFixed(2);
+  const bd = document.getElementById('manualBreakdown');
+  if (breakdown.length) {
+    bd.innerHTML = breakdown
+      .sort((a,b) => b.val - a.val)
+      .map(x => `<div class="breakdown-row">
+        <span class="breakdown-label">${x.label}</span>
+        <span class="breakdown-val font-mono">$${x.val.toFixed(2)}</span>
+      </div>`).join('');
+  } else {
+    bd.innerHTML = `<div class="text-muted" style="font-size:13px;text-align:center">Заполните поля слева</div>`;
+  }
+  updateBudget();
+}
+
+function updateBudget() {
+  const receiptTotal = state.receipts.reduce((s,r) => s + (r.total || 0), 0);
+  const manualTotal  = Object.values(state.manualValues).reduce((s,v) => s + v, 0);
+  const grand = receiptTotal + manualTotal;
+  document.getElementById('budgetReceipts').textContent = '$' + receiptTotal.toFixed(2);
+  document.getElementById('budgetManual').textContent   = '$' + manualTotal.toFixed(2);
+  document.getElementById('budgetTotal').textContent    = '$' + grand.toFixed(2);
+}
+
+// ═══════════════════════════════════════════
+//  STATISTICS
+// ═══════════════════════════════════════════
+let donutChartInst = null;
+
+async function refreshStats() {
+  const payload = {
+    receipts: state.receipts,
+    manual: state.manualValues,
+  };
+
+  let data;
+  try {
+    const res = await fetch('/api/stats', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    data = await res.json();
+  } catch(e) {
+    console.error(e);
+    return;
+  }
+
+  const hasData = data.grand_total > 0;
+  document.getElementById('statsEmpty').style.display   = hasData ? 'none' : 'block';
+  document.getElementById('statsContent').style.display = hasData ? 'block' : 'none';
+  if (!hasData) return;
+
+  // Big numbers
+  document.getElementById('st-grand').textContent    = '$' + data.grand_total.toFixed(2);
+  document.getElementById('st-receipts').textContent = '$' + data.receipt_total.toFixed(2);
+  document.getElementById('st-receipts-sub').textContent = `${data.receipt_count} чеков`;
+  document.getElementById('st-manual').textContent   = '$' + data.manual_total.toFixed(2);
+  document.getElementById('st-items').textContent    = data.item_count;
+
+  // Donut chart
+  const cats = data.receipt_by_category || {};
+  const catEntries = Object.entries(cats).filter(([,v]) => v > 0).sort((a,b) => b[1]-a[1]);
+  const labels = catEntries.map(([k]) => CATEGORY_LABELS[k] || k);
+  const values = catEntries.map(([,v]) => v);
+  const colors = catEntries.map(([k]) => CATEGORY_COLORS[k] || '#374151');
+
+  if (donutChartInst) donutChartInst.destroy();
+  if (values.length) {
+    const ctx = document.getElementById('donutChart').getContext('2d');
+    donutChartInst = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` $${ctx.parsed.toFixed(2)} (${(ctx.parsed/values.reduce((a,b)=>a+b,0)*100).toFixed(1)}%)`,
+            },
+            backgroundColor: '#1a1e2a',
+            borderColor: '#252836',
+            borderWidth: 1,
+            titleColor: '#e8eaf0',
+            bodyColor: '#6b7280',
+          }
+        },
+      }
+    });
+  }
+
+  // Category bars
+  const maxVal = Math.max(...values, 1);
+  const barsEl = document.getElementById('categoryBars');
+  barsEl.innerHTML = catEntries.map(([k,v]) => `
+    <div class="cat-bar-row">
+      <div class="cat-bar-label">${CATEGORY_LABELS[k] || k}</div>
+      <div class="cat-bar-track">
+        <div class="cat-bar-fill" style="width:${(v/maxVal*100).toFixed(1)}%;background:${CATEGORY_COLORS[k]||'#374151'}"></div>
+      </div>
+      <div class="cat-bar-val">$${v.toFixed(2)}</div>
+    </div>`).join('');
+
+  // Manual breakdown
+  const manualCard = document.getElementById('manualStatsCard');
+  const manualEntries = Object.entries(data.manual || {}).filter(([,v]) => v > 0);
+  const manualLabels = {
+    groceries:'🛒 Продукты', taxi:'🚕 Такси', transport:'🚌 Транспорт',
+    medical:'💊 Медицина', leisure:'🎭 Развлечения', clothing:'👗 Одежда',
+    beauty:'💅 Красота', gym:'🏋️ Фитнес', education:'📚 Образование',
+    pets:'🐾 Питомцы', subscriptions:'📱 Подписки', housing:'🏠 Жильё',
+    gifts:'🎁 Подарки', other_manual:'📋 Прочее',
+  };
+
+  if (manualEntries.length) {
+    manualCard.style.display = 'block';
+    document.getElementById('manualCatsGrid').innerHTML = manualEntries
+      .sort((a,b) => b[1]-a[1])
+      .map(([k,v]) => `<div class="manual-cat-card">
+        <span class="manual-cat-label">${manualLabels[k]||k}</span>
+        <span class="manual-cat-val font-mono">$${v.toFixed(2)}</span>
+      </div>`).join('');
+  } else {
+    manualCard.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
