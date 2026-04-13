@@ -12,8 +12,9 @@ from flask import Flask, render_template, request, jsonify
 try:
     import sys
     sys.path.insert(0, str(Path(__file__).parent))
-    from parser import parse_receipt_text
-    from categorizer import categorize_items
+    from flask import Flask, render_template, request, jsonify
+    from src.parser import parse_receipt_text
+    from src.categorizer import categorize_items
     PARSER_AVAILABLE = True
 except Exception as e:
     PARSER_AVAILABLE = False
